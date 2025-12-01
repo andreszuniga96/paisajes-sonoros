@@ -42,6 +42,7 @@ const assets = {
   impulso: "WhatsApp Image 2025-11-30 at 8.38.25 PM.jpeg",
   grupo: "WhatsApp Image 2025-12-01 at 7.15.18 AM.jpeg",
   bioexpo: "Captura de pantalla 2025-12-01 075548.png",
+  open:"WhatsApp Image 2025-12-01 at 10.08.34 AM.jpeg",
   // Imágenes de la galería
   mountain: "WhatsApp Image 2025-11-30 at 8.15.26 PM (5).jpeg",
   toucan: "WhatsApp Image 2025-11-30 at 8.15.26 PM (3).jpeg",
@@ -655,6 +656,7 @@ const App = () => {
             <SponsorLogo src={assets.triskra} alt="Triskra VJ" className="bg-black p-2 rounded" />
             <SponsorLogo src={assets.impulso} alt="Impulso" className="bg-teal-600 p-1 rounded" />
             <SponsorLogo src={assets.grupo} alt="Grupo Brand" />
+            <SponsorLogo src={assets.open} alt="Open" />
           </div>
         </div>
       </section>
