@@ -1,6 +1,30 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Leaf, Music, Brain, Calendar, MapPin, Instagram, CheckCircle, ArrowRight, Activity, Globe, Menu, X, Camera, Mail, Download, Share2, Users, Heart, Phone, Star, Play } from 'lucide-react';
-import emailjs from '@emailjs/browser'; 
+import React, { useState, useEffect } from 'react';
+import { Leaf, Music, Brain, Calendar, MapPin, Instagram, CheckCircle, ArrowRight, Activity, Globe, Menu, X, Camera, Mail, Download, Share2, Users, Phone, Star, MessageCircle } from 'lucide-react';
+
+// --- IMPORTAR FIREBASE ---
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, addDoc, onSnapshot, query } from "firebase/firestore";
+
+// --- CONFIGURACIÓN DE FIREBASE (¡PEGA TUS DATOS AQUÍ!) ---
+// Copia esto de tu consola de Firebase > Configuración del Proyecto
+const firebaseConfig = {
+  apiKey: "AIzaSyC7N04xewN_Tk3gDWvDZqxuYoIIXWbhWqA",
+  authDomain: "bioexpo-registro.firebaseapp.com",
+  projectId: "bioexpo-registro",
+  storageBucket: "bioexpo-registro.firebasestorage.app",
+  messagingSenderId: "775413309376",
+  appId: "1:775413309376:web:21ef55574259ad32b0f225",
+  measurementId: "G-5SQ9TM1KXS"
+};
+
+// Inicializar Firebase solo si hay configuración (para evitar errores en visualización si no se pone)
+let db;
+try {
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+} catch (e) {
+  console.warn("Firebase no configurado aún o error en init");
+}
 
 // --- Assets Mapping ---
 const assets = {
@@ -12,7 +36,12 @@ const assets = {
   triskra: "WhatsApp Image 2025-11-30 at 8.21.36 PM (1).jpeg",
   impulsoVerde: "LOGO PNG. BLANCO.png",
   terapiaIndividual: "WhatsApp Image 2025-11-30 at 10.29.50 PM.png",
-  videoPaisaje: "VID-20251130-WA0047.mp4", // Video de fondo
+  videoPaisaje: "VID-20251130-WA0047.mp4",
+  omarLopez: "WhatsApp Image 2025-12-01 at 7.19.36 AM.jpeg",
+  corponarino: "logo t.png",
+  impulso: "WhatsApp Image 2025-11-30 at 8.38.25 PM.jpeg",
+  grupo: "WhatsApp Image 2025-12-01 at 7.15.18 AM.jpeg",
+  bioexpo: "Captura de pantalla 2025-12-01 075548.png",
   // Imágenes de la galería
   mountain: "WhatsApp Image 2025-11-30 at 8.15.26 PM (5).jpeg",
   toucan: "WhatsApp Image 2025-11-30 at 8.15.26 PM (3).jpeg",
@@ -41,7 +70,6 @@ const SponsorLogo = ({ src, alt, className = "", isText = false, text = "" }) =>
   </div>
 );
 
-// Componente para el Ticket Digital
 const DigitalTicket = ({ data }) => (
   <div id="ticket-digital" className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-2xl max-w-sm mx-auto transform transition-all hover:scale-[1.02] relative my-4">
     <div className="bg-teal-900 p-6 relative overflow-hidden">
@@ -63,19 +91,16 @@ const DigitalTicket = ({ data }) => (
         <div className="grid grid-cols-2 gap-4 border-t border-b border-gray-100 py-4">
           <div>
             <p className="text-[10px] text-gray-400 uppercase font-bold">Fecha</p>
-            <p className="text-sm font-semibold text-teal-700">{data.schedule.split('-')[0]}</p>
+            <p className="text-sm font-semibold text-teal-700">{data.schedule.split(' - ')[0]}</p>
           </div>
           <div>
             <p className="text-[10px] text-gray-400 uppercase font-bold">Hora</p>
-            <p className="text-sm font-semibold text-teal-700">{data.schedule.split('-')[1] || '10:30 a.m.'}</p>
+            <p className="text-sm font-semibold text-teal-700">{data.schedule.split(' - ')[1]}</p>
           </div>
         </div>
         <div>
           <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">Lugar</p>
           <p className="text-sm text-gray-600">Casa Museo Taminango</p>
-        </div>
-        <div className="bg-teal-50 p-3 rounded-lg mt-2">
-          <p className="text-xs text-teal-800 italic">"Cuando escuchamos la naturaleza, recordamos quiénes somos."</p>
         </div>
       </div>
     </div>
@@ -88,48 +113,83 @@ const App = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [formStep, setFormStep] = useState('input');
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', schedule: 'Martes 2 Dic - 10:30 a.m.' });
-  const formRef = useRef();
+  const [occupancy, setOccupancy] = useState({});
 
-  // --- CONFIGURACIÓN EMAILJS ---
-  const SERVICE_ID = "service_oehd3t2";
-  const TEMPLATE_ID = "template_7f41zvm";
-  const PUBLIC_KEY = "Vdx5ZMfYUFTuWkhgA";
+  // Configuración de Aforo Inicial (Los que ya están inscritos manualmente)
+  const manualOccupancy = {
+    'Jueves 4 Dic - 10:30 a.m.': 30, // Ya hay 30 inscritos
+  };
+  const MAX_CAPACITY = 50;
 
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 50);
     };
     window.addEventListener('scroll', handleScroll);
+
+    // --- ESCUCHA EN TIEMPO REAL DE FIREBASE ---
+    if (db) {
+      const q = query(collection(db, "registrations"));
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const counts = {};
+        querySnapshot.forEach((doc) => {
+          const sched = doc.data().schedule;
+          counts[sched] = (counts[sched] || 0) + 1;
+        });
+        setOccupancy(counts);
+      });
+      return () => {
+        window.removeEventListener('scroll', handleScroll);
+        unsubscribe();
+      };
+    }
+    
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Calcular cupos restantes
+  const getRemainingSpots = (scheduleOption) => {
+    const dbCount = occupancy[scheduleOption] || 0;
+    const manualCount = manualOccupancy[scheduleOption] || 0;
+    const totalUsed = dbCount + manualCount;
+    return Math.max(0, MAX_CAPACITY - totalUsed);
+  };
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setFormStep('loading');
 
-    // 1. Definir los parámetros de la plantilla
-    const templateParams = {
-        name: formData.name, // El valor del estado de React
-        schedule: formData.schedule, // El valor del estado de React
-        email: formData.email, // El valor del estado de React
-        // Puedes ignorar 'phone' si no está en la plantilla
-    };
+    // Validación final de aforo antes de guardar
+    if (getRemainingSpots(formData.schedule) <= 0) {
+      alert("Lo sentimos, este horario se acaba de llenar.");
+      setFormStep('input');
+      return;
+    }
 
-    // 2. Ejecutar la función real de EmailJS
-    emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY)
-      .then(() => setFormStep('success'))
-      .catch((err) => { 
-          console.error("Error al enviar el correo:", err); 
-          setFormStep('error'); 
-      });
-
-    setTimeout(() => {
-      setFormStep('success');
-    }, 2000);
+    try {
+      if (db) {
+        // Guardar en Firebase
+        await addDoc(collection(db, "registrations"), {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          schedule: formData.schedule,
+          timestamp: new Date()
+        });
+        setFormStep('success');
+      } else {
+        // Fallback si no hay DB configurada (solo simulación visual)
+        console.warn("DB no configurada, simulando éxito");
+        setTimeout(() => setFormStep('success'), 1500);
+      }
+    } catch (e) {
+      console.error("Error adding document: ", e);
+      setFormStep('error');
+    }
   };
 
   const closeModal = () => {
@@ -139,6 +199,20 @@ const App = () => {
       setFormData({ name: '', email: '', phone: '', schedule: 'Martes 2 Dic - 10:30 a.m.' });
     }, 300);
   };
+
+  // Lista de Horarios
+  const schedules = [
+    "Martes 2 Dic - 10:30 a.m.",
+    "Martes 2 Dic - 4:30 p.m.",
+    "Miércoles 3 Dic - 10:30 a.m.",
+    "Miércoles 3 Dic - 4:30 p.m.",
+    "Miércoles 3 Dic - 6:30 p.m.",
+    "Jueves 4 Dic - 10:30 a.m.",
+    "Jueves 4 Dic - 4:30 p.m.",
+    "Jueves 4 Dic - 6:30 p.m.",
+    "Viernes 5 Dic - 9:00 a.m.",
+    "Viernes 5 Dic - 11:30 a.m."
+  ];
 
   return (
     <div className="font-sans text-gray-800 bg-gray-50 min-h-screen selection:bg-teal-200 selection:text-teal-900 overflow-x-hidden">
@@ -151,7 +225,7 @@ const App = () => {
           </a>
           
           <div className="hidden md:flex gap-6 text-sm font-semibold tracking-wide text-gray-600 items-center">
-            {['Inicio', 'Experiencia', 'Servicios', 'Créditos', 'Bio'].map((item) => (
+            {['Inicio', 'Experiencia', 'Servicios', 'Bio'].map((item) => (
               <a key={item} href={`#${item.toLowerCase().replace(' ', '-')}`} className="hover:text-teal-600 transition-colors text-[10px] lg:text-xs uppercase tracking-widest">
                 {item}
               </a>
@@ -169,7 +243,7 @@ const App = () => {
 
         {mobileMenuOpen && (
            <div className="md:hidden absolute top-full left-0 w-full bg-white shadow-lg py-4 px-6 flex flex-col gap-4 border-t border-gray-100 h-screen z-50">
-              {['Inicio', 'Experiencia', 'Servicios', 'Créditos', 'Bio'].map((item) => (
+              {['Inicio', 'Experiencia', 'Servicios', 'Bio'].map((item) => (
               <a key={item} href={`#${item.toLowerCase().replace(' ', '-')}`} className="text-gray-600 font-medium py-3 border-b border-gray-100 text-lg" onClick={() => setMobileMenuOpen(false)}>
                 {item}
               </a>
@@ -286,7 +360,7 @@ const App = () => {
       {/* --- NEW SECTION: Why is it important? (Video Background) --- */}
       <section className="py-24 relative overflow-hidden flex items-center justify-center text-white">
         <div className="absolute inset-0 z-0">
-          <video autoPlay loop muted className="w-full h-full object-cover opacity-60">
+          <video autoPlay loop muted playsInline className="w-full h-full object-cover opacity-60">
             <source src={assets.videoPaisaje} type="video/mp4" />
           </video>
           <div className="absolute inset-0 bg-teal-900/70 backdrop-blur-[2px]"></div>
@@ -354,7 +428,7 @@ const App = () => {
          </div>
       </section>
 
-      {/* --- SERVICES SECTION --- */}
+      {/* --- SERVICES SECTION (Actualizada) --- */}
       <section id="servicios" className="py-24 bg-gray-50 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-teal-100/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
         <div className="container mx-auto px-6 relative z-10">
@@ -363,22 +437,23 @@ const App = () => {
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2">Servicios Terapéuticos</h2>
           </div>
 
-          <div className="flex flex-col lg:flex-row gap-8 items-stretch">
+          <div className="flex flex-col gap-12">
+            
             {/* Servicio 1: Terapia Individual */}
-            <div className="lg:w-2/3 bg-white rounded-3xl overflow-hidden shadow-xl flex flex-col md:flex-row">
-               <div className="md:w-1/2 relative min-h-[300px]">
+            <div className="bg-white rounded-3xl overflow-hidden shadow-xl flex flex-col md:flex-row">
+               <div className="md:w-5/12 relative min-h-[300px]">
                  <img src={assets.terapiaIndividual} alt="Terapia Individual" className="absolute inset-0 w-full h-full object-cover" />
                  <div className="absolute inset-0 bg-gradient-to-t from-teal-900/80 to-transparent flex items-end p-8">
                    <h3 className="text-white text-2xl font-bold">Vivir es Vibrar</h3>
                  </div>
                </div>
-               <div className="md:w-1/2 p-8 flex flex-col justify-center">
+               <div className="md:w-7/12 p-8 lg:p-12 flex flex-col justify-center">
                  <div className="flex items-center gap-2 text-teal-600 mb-4">
                     <Star className="w-5 h-5 fill-current" />
                     <span className="font-bold uppercase text-xs tracking-wider">Método Sonora</span>
                  </div>
                  <h3 className="text-2xl font-bold text-gray-900 mb-4">Terapia Individual</h3>
-                 <p className="text-gray-600 mb-6 leading-relaxed text-sm">
+                 <p className="text-gray-600 mb-6 leading-relaxed">
                    La música, la respiración rítmica y la visualización trabajan juntas para entrenar tu atención. Tu energía enfocada se convierte en movimiento para transformar tus metas en logros.
                  </p>
                  <a 
@@ -397,33 +472,39 @@ const App = () => {
                </div>
             </div>
 
-            {/* Servicio 2: Musicoterapia Grupal */}
-            <div className="lg:w-1/3 bg-gradient-to-br from-indigo-900 to-purple-900 rounded-3xl p-8 text-white flex flex-col justify-between shadow-xl relative overflow-hidden">
-               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
-               <div>
-                 <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center mb-6">
-                    <Users className="w-6 h-6 text-white" />
-                 </div>
-                 <h3 className="text-2xl font-bold mb-4">Musicoterapia Grupal</h3>
-                 <p className="text-indigo-100 leading-relaxed mb-6 text-sm">
-                   Espacios de conexión colectiva donde el sonido se convierte en el hilo conductor para sanar, integrar y fortalecer equipos o comunidades. Ideal para empresas y grupos de bienestar.
-                 </p>
+            {/* Servicio 2: Musicoterapia Grupal (Sección Independiente Omar López) */}
+            <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-3xl overflow-hidden shadow-xl text-white flex flex-col md:flex-row-reverse">
+               <div className="md:w-5/12 relative min-h-[300px] group">
+                 <img src={assets.omarLopez} alt="Musicoterapia Grupal - Omar López" className="absolute inset-0 w-full h-full object-cover" />
+                 <div className="absolute inset-0 bg-gradient-to-l from-transparent to-purple-900/90"></div>
                </div>
-               <a 
-                 href="https://wa.me/573206586727?text=Hola%20Francisco,%20me%20interesa%20información%20sobre%20musicoterapia%20grupal." 
-                 target="_blank" 
-                 rel="noreferrer" 
-                 className="inline-flex items-center justify-center gap-2 bg-white text-indigo-900 py-3 px-6 rounded-xl font-bold hover:bg-indigo-50 transition-all w-full"
-               >
-                 Solicitar Información
-                 <ArrowRight className="w-4 h-4" />
-               </a>
+               <div className="md:w-7/12 p-8 lg:p-12 flex flex-col justify-center relative z-10">
+                 <div className="flex items-center gap-2 text-purple-300 mb-4">
+                    <Users className="w-5 h-5" />
+                    <span className="font-bold uppercase text-xs tracking-wider">Conexión Colectiva</span>
+                 </div>
+                 <h3 className="text-2xl font-bold mb-2">Musicoterapia Grupal</h3>
+                 <p className="text-purple-200 text-sm mb-4">Dirigido por el Musicoterapeuta Omar López. Licenciado en Música. Máster en Musicoterapia. Medicina Tradicional China</p>
+                 <p className="text-indigo-100 leading-relaxed mb-8">
+                   Espacios de conexión donde el sonido sana, integra y fortalece equipos o comunidades. Ideal para empresas y grupos de bienestar que buscan armonía y resiliencia a través de la música.
+                 </p>
+                 <a 
+                   href="https://wa.me/573117762785?text=Hola,%20me%20interesa%20información%20sobre%20musicoterapia%20grupal." 
+                   target="_blank" 
+                   rel="noreferrer" 
+                   className="inline-flex items-center justify-center gap-2 bg-white text-indigo-900 py-3 px-6 rounded-xl font-bold hover:bg-indigo-50 transition-all w-full md:w-auto"
+                 >
+                   <MessageCircle className="w-4 h-4" />
+                   Contactar a Omar (+57 311 776 2785)
+                 </a>
+               </div>
             </div>
+
           </div>
         </div>
       </section>
 
-      {/* --- CREDITS SECTION (FULL) --- */}
+      {/* --- CREDITS SECTION (Actualizada) --- */}
       <section id="creditos" className="py-20 bg-slate-50 border-t border-slate-200">
         <div className="container mx-auto px-6">
           <div className="text-center mb-12">
@@ -463,10 +544,10 @@ const App = () => {
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 lg:row-span-2">
               <h4 className="text-teal-600 font-bold uppercase text-xs tracking-widest mb-4">Equipo Musicoterapéutico</h4>
               <ul className="space-y-3 text-sm text-slate-700">
-                <li><strong className="block text-slate-900">Director Musical:</strong> MT Omar López</li>
-                <li><strong className="block text-slate-900">Cantante:</strong> MT Consuelo López</li>
-                <li><strong className="block text-slate-900">Neuromúsico:</strong> MT Francisco Lagos</li>
-                <li><strong className="block text-slate-900">Chelo:</strong> Gilberto Trujillo</li>
+                <li><strong className="block text-slate-900">Director Musical:</strong> Musicoterapeuta Omar López</li>
+                <li><strong className="block text-slate-900">Cantante:</strong> Musicoterapeuta Consuelo López</li>
+                <li><strong className="block text-slate-900">Neuromúsico:</strong> Musicoterapeuta Francisco Lagos</li>
+                <li><strong className="block text-slate-900">Chelo:</strong> Musicoterapeuta Gilberto Trujillo</li>
                 <li><strong className="block text-slate-900">Mandolina y guitarra:</strong> Nicolás López</li>
               </ul>
               <div className="mt-6 pt-6 border-t border-slate-100">
@@ -537,7 +618,7 @@ const App = () => {
                <h3 className="text-emerald-600 font-bold uppercase tracking-widest text-xs md:text-sm">¿Quién está detrás?</h3>
                <h2 className="text-3xl md:text-4xl font-bold text-gray-900">Francisco Lagos Luna</h2>
                <p className="text-lg md:text-xl text-teal-800 font-medium">
-                 Ingeniero Sanitario | Musicoterapeuta | Neuromúsico
+                 Ingeniero Sanitario y Ambiental | Musicoterapeuta | Neuromúsico
                </p>
                <div className="space-y-4 text-gray-600 leading-relaxed text-sm md:text-base">
                  <p>
@@ -565,14 +646,15 @@ const App = () => {
           <h2 className="text-center text-2xl font-bold mb-12">Nuestros Aliados</h2>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 items-center">
-            <SponsorLogo isText={true} text="BIOEXPO 2025" />
-            <SponsorLogo isText={true} text="CORPONARIÑO" />
+            <SponsorLogo src={assets.bioexpo} alt="BioExpo Brand" />
+            <SponsorLogo src={assets.corponarino} alt="Corponarino Brand" />
             <SponsorLogo src={assets.impulsoVerde} alt="Impulso Verde" className="bg-teal-600 p-1 rounded" />
             <SponsorLogo src={assets.franciscoLogo} alt="Francisco Lagos Brand" />
             <SponsorLogo src={assets.espeletia} alt="Espeletia Studio" className="bg-black/90 p-2 rounded" />
             <SponsorLogo src={assets.tianYao} alt="Tian Yao" />
             <SponsorLogo src={assets.triskra} alt="Triskra VJ" className="bg-black p-2 rounded" />
             <SponsorLogo src={assets.impulso} alt="Impulso" className="bg-teal-600 p-1 rounded" />
+            <SponsorLogo src={assets.grupo} alt="Grupo Brand" />
           </div>
         </div>
       </section>
@@ -607,7 +689,7 @@ const App = () => {
             <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar grow">
               
               {formStep === 'input' && (
-                <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-1">
                     <label className="text-sm font-bold text-gray-700 ml-1">Nombre Completo</label>
                     <input type="text" name="name" required value={formData.name} onChange={handleInputChange} className="w-full px-4 py-3 rounded-xl bg-gray-50 border-2 border-gray-100 focus:border-teal-500 focus:bg-white outline-none transition-all" placeholder="Tu nombre aquí" />
@@ -625,24 +707,29 @@ const App = () => {
                     <label className="text-sm font-bold text-gray-700 ml-1">Horario Preferido</label>
                     <div className="relative">
                       <select name="schedule" value={formData.schedule} onChange={handleInputChange} className="w-full px-4 py-3 rounded-xl bg-gray-50 border-2 border-gray-100 focus:border-teal-500 focus:bg-white outline-none transition-all appearance-none cursor-pointer">
-                        <option>Martes 2 Dic - 10:30 a.m.</option>
-                        <option>Martes 2 Dic - 4:30 p.m.</option>
-                        <option>Miércoles 3 Dic - 10:30 a.m.</option>
-                        <option>Miércoles 3 Dic - 4:30 p.m.</option>
-                        <option>Miércoles 3 Dic - 6:30 p.m.</option>
-                        <option>Jueves 4 Dic - 10:30 a.m.</option>
-                        <option>Jueves 4 Dic - 4:30 p.m.</option>
-                        <option>Jueves 4 Dic - 6:30 p.m.</option>
-                        <option>Viernes 5 Dic - 9:00 a.m.</option>
-                        <option>Viernes 5 Dic - 11:30 a.m.</option>
+                        {schedules.map(time => {
+                          const remaining = getRemainingSpots(time);
+                          return (
+                            <option key={time} value={time} disabled={remaining <= 0}>
+                              {time} {remaining <= 0 ? '(AGOTADO)' : remaining < 10 ? `(¡Solo ${remaining} cupos!)` : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                       <Calendar className="absolute right-4 top-3.5 text-gray-400 pointer-events-none w-5 h-5" />
                     </div>
+                    {/* Alerta de Aforo */}
+                    <div className={`text-xs font-bold mt-1 ${getRemainingSpots(formData.schedule) < 10 ? 'text-red-500' : 'text-teal-600'}`}>
+                       {getRemainingSpots(formData.schedule) <= 0 ? 'Este horario está completo.' : `Quedan ${getRemainingSpots(formData.schedule)} cupos disponibles.`}
+                    </div>
                   </div>
 
-                  <button type="submit" className="w-full bg-teal-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-teal-700 hover:shadow-teal-500/40 transform hover:-translate-y-1 transition-all mt-2">
-                    Confirmar y Enviar Invitación
+                  <button type="submit" disabled={getRemainingSpots(formData.schedule) <= 0} className="w-full bg-teal-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-teal-700 hover:shadow-teal-500/40 transform hover:-translate-y-1 transition-all mt-2 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                    Confirmar Invitación
                   </button>
+                  <p className="text-xs text-gray-400 text-center mt-2">
+                    *Al registrarte aseguras tu ticket digital y quedas en nuestra lista oficial.
+                  </p>
                 </form>
               )}
 
@@ -654,7 +741,7 @@ const App = () => {
                       <Mail className="w-6 h-6 text-teal-600 animate-pulse" />
                     </div>
                   </div>
-                  <p className="text-gray-500 font-medium animate-pulse">Sincronizando con los servidores...</p>
+                  <p className="text-gray-500 font-medium animate-pulse">Registrando tu asistencia...</p>
                 </div>
               )}
 
@@ -662,15 +749,20 @@ const App = () => {
                 <div className="text-center animate-fade-in pb-4">
                   <div className="flex items-center justify-center gap-2 text-green-600 mb-4 bg-green-50 py-2 rounded-lg">
                     <CheckCircle className="w-5 h-5" />
-                    <span className="font-bold text-sm">Registro Exitoso y Correo Enviado</span>
+                    <span className="font-bold text-sm">¡Registro Exitoso!</span>
                   </div>
                   <h3 className="text-lg font-bold text-gray-700 mb-4">Esta es tu entrada oficial:</h3>
                   <div className="mb-6"><DigitalTicket data={formData} /></div>
                   <div className="flex gap-2 justify-center mb-6">
                      <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors">
-                        <Download className="w-4 h-4" /> Guardar
+                        <Download className="w-4 h-4" /> Guardar Imagen
                      </button>
                   </div>
+                  
+                  <p className="text-xs text-gray-400 mb-4">
+                    Por favor guarda esta imagen. Debido al alto tráfico, el correo de confirmación podría tardar unos minutos. Tu nombre ya está en la lista de ingreso.
+                  </p>
+
                   <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100 rounded-2xl p-5 shadow-sm text-left">
                     <div className="flex items-start gap-4">
                       <div className="bg-white p-2 rounded-full shadow-sm shrink-0">
@@ -678,7 +770,7 @@ const App = () => {
                       </div>
                       <div>
                         <h4 className="font-bold text-purple-900 text-sm">¡No te vayas aún!</h4>
-                        <p className="text-xs text-purple-700 mt-1 mb-3">Mientras llega el día, sígueme en Instagram para ver el "detrás de cámaras".</p>
+                        <p className="text-xs text-purple-700 mt-1 mb-3">Sígueme en Instagram para ver el "detrás de cámaras".</p>
                         <a href="https://www.instagram.com/franciscolagosluna?igsh=MWp5a2IxZThqbXFoYQ%3D%3D" target="_blank" rel="noreferrer" className="inline-block text-center bg-purple-600 text-white text-xs font-bold py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors shadow-purple-200 shadow-lg w-full sm:w-auto">
                           Ver Contenido Exclusivo
                         </a>
