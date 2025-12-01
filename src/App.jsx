@@ -119,6 +119,8 @@ const App = () => {
   // Configuración de Aforo Inicial (Los que ya están inscritos manualmente)
   const manualOccupancy = {
     'Jueves 4 Dic - 10:30 a.m.': 30, // Ya hay 30 inscritos
+    'Miércoles 3 Dic - 4:30 p.m.':20, // Ya hay 20 inscritos
+    'Miércoles 3 Dic - 6:30 p.m.':20, // Ya hay 20 inscritos
   };
   const MAX_CAPACITY = 50;
 
