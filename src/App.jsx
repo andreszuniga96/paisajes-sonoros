@@ -42,6 +42,7 @@ const assets = {
   impulso: "WhatsApp Image 2025-11-30 at 8.38.25 PM.jpeg",
   grupo: "WhatsApp Image 2025-12-01 at 7.15.18 AM.jpeg",
   bioexpo: "Captura de pantalla 2025-12-01 075548.png",
+  cuantic: "WhatsApp Image 2025-12-01 at 9.50.59 PM.jpeg",
   open:"WhatsApp Image 2025-12-01 at 10.08.34 AM.jpeg",
   // Imágenes de la galería
   mountain: "WhatsApp Image 2025-11-30 at 8.15.26 PM (5).jpeg",
@@ -206,7 +207,7 @@ const App = () => {
   // Lista de Horarios
   const schedules = [
     "Martes 2 Dic - 10:30 a.m.",
-    "Martes 2 Dic - 4:30 p.m.",
+    "Martes 2 Dic - 3:30 p.m.",
     "Miércoles 3 Dic - 10:30 a.m.",
     "Miércoles 3 Dic - 4:30 p.m.",
     "Miércoles 3 Dic - 6:30 p.m.",
@@ -659,6 +660,7 @@ const App = () => {
             <SponsorLogo src={assets.impulso} alt="Impulso" className="bg-teal-600 p-1 rounded" />
             <SponsorLogo src={assets.grupo} alt="Grupo Brand" />
             <SponsorLogo src={assets.open} alt="Open" />
+            <SponsorLogo src={assets.cuantic} alt="Open" />
           </div>
         </div>
       </section>
